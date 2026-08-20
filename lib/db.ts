@@ -3,7 +3,11 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+/** Where the database and uploads live. Point DATA_DIR at a mounted volume in
+ *  production so both survive redeploys. */
+export const DATA_DIR = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(process.cwd(), 'data');
 export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 
 const RESOURCES_DDL = `

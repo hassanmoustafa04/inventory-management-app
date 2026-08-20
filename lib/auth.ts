@@ -8,7 +8,7 @@ export const SESSION_COOKIE = 'pt_session';
 
 export function sessionSecretValue(): string {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
-  const dir = path.join(process.cwd(), 'data');
+  const dir = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(process.cwd(), 'data');
   const file = path.join(dir, '.session-secret');
   try {
     return fs.readFileSync(file, 'utf8').trim();

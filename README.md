@@ -75,11 +75,16 @@ Production: `npm run build && npm start`
 Teacher name, bio, WhatsApp number, prices, availability, and booking rules are
 all edited live from the dashboard.
 
-## Deployment notes
+## Deployment
 
-Uses a local SQLite file and local uploads, so deploy on a host with a
-persistent disk (Railway, Fly.io, a VPS). **Back up the whole `data/`
-directory** — it holds the database *and* every uploaded file.
+Needs a host with a **persistent volume** — it keeps the database and every
+uploaded file on disk. Railway takes about ten minutes; Vercel cannot run this
+without migrating to Postgres/Turso and blob storage first.
+
+Full instructions, including the volume mount that makes or breaks it, are in
+[`DEPLOY.md`](./DEPLOY.md). `DATA_DIR` overrides where data is written and
+defaults to `./data`. **Back up that directory** — it holds the database *and*
+every uploaded file.
 
 See [`PRODUCT.md`](./PRODUCT.md) for the strategy behind the design.
 
