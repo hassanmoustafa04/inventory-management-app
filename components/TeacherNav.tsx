@@ -7,6 +7,8 @@ const ITEMS = [
   { href: '/teacher', icon: '🏠', label: 'الرئيسية' },
   { href: '/teacher/bookings', icon: '📋', label: 'الحجوزات' },
   { href: '/teacher/schedule', icon: '🗓️', label: 'جدول أوقاتي' },
+  { href: '/teacher/resources', icon: '📚', label: 'المكتبة' },
+  { href: '/teacher/review', icon: '📥', label: 'المراجعة' },
   { href: '/teacher/students', icon: '👥', label: 'الطلاب' },
   { href: '/teacher/settings', icon: '⚙️', label: 'الإعدادات' },
 ];

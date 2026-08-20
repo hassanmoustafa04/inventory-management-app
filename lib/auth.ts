@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation';
 
 export const SESSION_COOKIE = 'pt_session';
 
-function sessionSecret(): string {
+export function sessionSecretValue(): string {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
   const dir = path.join(process.cwd(), 'data');
   const file = path.join(dir, '.session-secret');
@@ -21,7 +21,7 @@ function sessionSecret(): string {
 }
 
 export function sessionToken(): string {
-  return crypto.createHmac('sha256', sessionSecret()).update('teacher-session-v1').digest('hex');
+  return crypto.createHmac('sha256', sessionSecretValue()).update('teacher-session-v1').digest('hex');
 }
 
 export function isTeacher(): boolean {
@@ -31,7 +31,7 @@ export function isTeacher(): boolean {
   return crypto.timingSafeEqual(Buffer.from(c), Buffer.from(expected));
 }
 
-/** Guard for teacher pages and server actions. */
+/** Guard for owner pages and server actions. */
 export function requireTeacher(): void {
   if (!isTeacher()) redirect('/teacher/login');
 }

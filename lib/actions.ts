@@ -6,6 +6,9 @@ import { redirect } from 'next/navigation';
 import { getDb, getSetting, setSetting, sha256, Booking } from './db';
 import { requireTeacher, sessionToken, SESSION_COOKIE } from './auth';
 import { normalizeKwPhone } from './slots';
+import { Member, Resource, ResourceAccess, SUBJECTS, LEVELS, RESOURCE_TYPES } from './db';
+import { currentMember, hashPassword, MEMBER_COOKIE, memberCookieValue, verifyPassword } from './members';
+import { deleteStoredFile, saveUpload, slugify } from './resources';
 
 // ---------- auth ----------
 
@@ -153,4 +156,247 @@ export async function saveOfferingAction(formData: FormData) {
   revalidatePath('/');
   revalidatePath('/teacher/settings');
   redirect('/teacher/settings?msg=' + encodeURIComponent('تم تحديث الباقة'));
+}
+
+// ============================================================
+//  Hub: members, resources, review queue
+// ============================================================
+
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function backTo(pathname: string, msg: string, isError = false): never {
+  redirect(`${pathname}?${isError ? 'err' : 'msg'}=${encodeURIComponent(msg)}`);
+}
+
+// ---------- member auth ----------
+
+export async function registerAction(_prev: { error: string }, formData: FormData) {
+  const name = String(formData.get('name') ?? '').trim();
+  const email = String(formData.get('email') ?? '').trim().toLowerCase();
+  const phoneRaw = String(formData.get('phone') ?? '').trim();
+  const password = String(formData.get('password') ?? '');
+  const role = String(formData.get('role') ?? 'student') === 'teacher' ? 'teacher' : 'student';
+  const school = String(formData.get('school') ?? '').trim();
+  const subjects = (formData.getAll('subjects') as string[]).filter((s) => SUBJECTS.includes(s)).join('، ');
+  const bio = String(formData.get('bio') ?? '').trim().slice(0, 600);
+
+  if (name.length < 2) return { error: 'اكتب اسمك الكامل' };
+  if (!EMAIL_RE.test(email)) return { error: 'البريد الإلكتروني غير صحيح' };
+  if (password.length < 8) return { error: 'كلمة المرور يجب أن تكون ٨ أحرف على الأقل' };
+
+  const phone = phoneRaw ? normalizeKwPhone(phoneRaw) : '';
+  if (phoneRaw && !phone) return { error: 'رقم الهاتف غير صحيح — اكتب رقماً كويتياً من ٨ أرقام' };
+  if (role === 'teacher' && !school) return { error: 'اكتب اسم المدرسة أو جهة العمل' };
+
+  const db = getDb();
+  if (db.prepare('SELECT 1 FROM members WHERE email = ?').get(email)) {
+    return { error: 'هذا البريد مسجّل مسبقاً — سجّل الدخول بدلاً من ذلك' };
+  }
+
+  // Teachers join a curated network: they wait for the owner's approval.
+  const status = role === 'teacher' ? 'pending' : 'active';
+  const info = db
+    .prepare(
+      `INSERT INTO members (name, email, phone, password_hash, role, status, school, subjects, bio)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(name, email, phone || '', hashPassword(password), role, status, school, subjects, bio);
+
+  cookies().set(MEMBER_COOKIE, memberCookieValue(Number(info.lastInsertRowid)), {
+    httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 60,
+  });
+  revalidatePath('/teacher/review');
+  redirect(role === 'teacher' ? '/me?welcome=teacher' : '/me?welcome=student');
+}
+
+export async function memberLoginAction(_prev: { error: string }, formData: FormData) {
+  const email = String(formData.get('email') ?? '').trim().toLowerCase();
+  const password = String(formData.get('password') ?? '');
+  const member = getDb().prepare('SELECT * FROM members WHERE email = ?').get(email) as
+    | Member | undefined;
+  if (!member || !verifyPassword(password, member.password_hash)) {
+    return { error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
+  }
+  if (member.status === 'rejected') {
+    return { error: 'هذا الحساب غير مفعّل — تواصل معنا للمساعدة' };
+  }
+  cookies().set(MEMBER_COOKIE, memberCookieValue(member.id), {
+    httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 60,
+  });
+  redirect('/me');
+}
+
+export async function memberLogoutAction() {
+  cookies().delete(MEMBER_COOKIE);
+  redirect('/');
+}
+
+export async function updateMemberProfileAction(formData: FormData) {
+  const member = currentMember();
+  if (!member) redirect('/auth/login');
+  const name = String(formData.get('name') ?? '').trim();
+  const phoneRaw = String(formData.get('phone') ?? '').trim();
+  const school = String(formData.get('school') ?? '').trim();
+  const bio = String(formData.get('bio') ?? '').trim().slice(0, 600);
+  const phone = phoneRaw ? normalizeKwPhone(phoneRaw) : '';
+  if (phoneRaw && !phone) backTo('/me/profile', 'رقم الهاتف غير صحيح', true);
+  if (name.length < 2) backTo('/me/profile', 'اكتب اسمك الكامل', true);
+
+  getDb()
+    .prepare('UPDATE members SET name = ?, phone = ?, school = ?, bio = ? WHERE id = ?')
+    .run(name, phone || '', school, bio, member.id);
+  revalidatePath('/me');
+  backTo('/me/profile', 'تم حفظ بياناتك');
+}
+
+// ---------- resource submit / manage ----------
+
+function readResourceFields(formData: FormData) {
+  const title = String(formData.get('title') ?? '').trim();
+  const description = String(formData.get('description') ?? '').trim().slice(0, 2000);
+  const subject = String(formData.get('subject') ?? '');
+  const level = String(formData.get('level') ?? '');
+  const type = String(formData.get('type') ?? '');
+  const access = String(formData.get('access') ?? 'public') as ResourceAccess;
+  return { title, description, subject, level, type, access };
+}
+
+function validateResourceFields(f: ReturnType<typeof readResourceFields>): string {
+  if (f.title.length < 4) return 'اكتب عنواناً واضحاً للملف';
+  if (!SUBJECTS.includes(f.subject)) return 'اختر المادة';
+  if (!LEVELS.includes(f.level)) return 'اختر المستوى الدراسي';
+  if (!RESOURCE_TYPES.some((t) => t.key === f.type)) return 'اختر نوع الملف';
+  if (!['public', 'member', 'student', 'teacher'].includes(f.access)) return 'اختر مستوى الوصول';
+  return '';
+}
+
+/** A network teacher submits a resource — it lands in the owner's review queue. */
+export async function submitResourceAction(_prev: { error: string }, formData: FormData) {
+  const member = currentMember();
+  if (!member) redirect('/auth/login');
+  if (member.role !== 'teacher' || member.status !== 'active') {
+    return { error: 'المشاركة متاحة للمعلمين المعتمدين فقط' };
+  }
+  const fields = readResourceFields(formData);
+  const err = validateResourceFields(fields);
+  if (err) return { error: err };
+
+  try {
+    const saved = await saveUpload(formData.get('file') as File);
+    getDb()
+      .prepare(
+        `INSERT INTO resources
+           (slug, title, description, subject, level, type, access, file_name, file_path,
+            file_size, mime, status, author_id, author_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
+      )
+      .run(
+        slugify(fields.title), fields.title, fields.description, fields.subject, fields.level,
+        fields.type, fields.access, saved.fileName, saved.storedName, saved.size, saved.mime,
+        member.id, member.name
+      );
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'تعذر رفع الملف' };
+  }
+  revalidatePath('/me');
+  revalidatePath('/teacher/review');
+  redirect('/me?msg=' + encodeURIComponent('تم إرسال الملف للمراجعة — سيُنشر بعد الموافقة عليه'));
+}
+
+/** The owner publishes a resource directly. */
+export async function ownerCreateResourceAction(_prev: { error: string }, formData: FormData) {
+  requireTeacher();
+  const fields = readResourceFields(formData);
+  const err = validateResourceFields(fields);
+  if (err) return { error: err };
+  try {
+    const saved = await saveUpload(formData.get('file') as File);
+    getDb()
+      .prepare(
+        `INSERT INTO resources
+           (slug, title, description, subject, level, type, access, file_name, file_path,
+            file_size, mime, status, author_id, author_name, featured)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', NULL, ?, ?)`
+      )
+      .run(
+        slugify(fields.title), fields.title, fields.description, fields.subject, fields.level,
+        fields.type, fields.access, saved.fileName, saved.storedName, saved.size, saved.mime,
+        getSetting('teacher_name'), formData.get('featured') ? 1 : 0
+      );
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'تعذر رفع الملف' };
+  }
+  revalidatePath('/resources');
+  revalidatePath('/teacher/resources');
+  redirect('/teacher/resources?msg=' + encodeURIComponent('تم نشر الملف'));
+}
+
+export async function updateResourceAction(formData: FormData) {
+  requireTeacher();
+  const id = Number(formData.get('id'));
+  const fields = readResourceFields(formData);
+  const err = validateResourceFields(fields);
+  if (err) backTo('/teacher/resources', err, true);
+  getDb()
+    .prepare(
+      `UPDATE resources SET title = ?, description = ?, subject = ?, level = ?, type = ?,
+                            access = ?, featured = ? WHERE id = ?`
+    )
+    .run(
+      fields.title, fields.description, fields.subject, fields.level, fields.type,
+      fields.access, formData.get('featured') ? 1 : 0, id
+    );
+  revalidatePath('/resources');
+  revalidatePath('/teacher/resources');
+  backTo('/teacher/resources', 'تم تحديث الملف');
+}
+
+export async function deleteResourceAction(formData: FormData) {
+  requireTeacher();
+  const id = Number(formData.get('id'));
+  const db = getDb();
+  const res = db.prepare('SELECT * FROM resources WHERE id = ?').get(id) as Resource | undefined;
+  if (!res) return;
+  db.prepare('DELETE FROM resource_downloads WHERE resource_id = ?').run(id);
+  db.prepare('DELETE FROM resources WHERE id = ?').run(id);
+  deleteStoredFile(res.file_path);
+  revalidatePath('/resources');
+  revalidatePath('/teacher/resources');
+}
+
+export async function reviewResourceAction(formData: FormData) {
+  requireTeacher();
+  const id = Number(formData.get('id'));
+  const decision = String(formData.get('decision'));
+  if (!['published', 'rejected'].includes(decision)) return;
+  const note = String(formData.get('note') ?? '').trim().slice(0, 300);
+  getDb()
+    .prepare("UPDATE resources SET status = ?, review_note = ? WHERE id = ? AND status = 'pending'")
+    .run(decision, note, id);
+  revalidatePath('/resources');
+  revalidatePath('/teacher/review');
+  revalidatePath('/me');
+}
+
+// ---------- teacher network approvals ----------
+
+export async function reviewMemberAction(formData: FormData) {
+  requireTeacher();
+  const id = Number(formData.get('id'));
+  const decision = String(formData.get('decision'));
+  if (!['active', 'rejected'].includes(decision)) return;
+  getDb()
+    .prepare("UPDATE members SET status = ? WHERE id = ? AND role = 'teacher'")
+    .run(decision, id);
+  revalidatePath('/teacher/review');
+  revalidatePath('/teachers');
+}
+
+/** Manually flag a member as one of the teacher's own students. */
+export async function toggleStudentFlagAction(formData: FormData) {
+  requireTeacher();
+  const id = Number(formData.get('id'));
+  getDb().prepare('UPDATE members SET is_student = 1 - is_student WHERE id = ?').run(id);
+  revalidatePath('/teacher/students');
 }

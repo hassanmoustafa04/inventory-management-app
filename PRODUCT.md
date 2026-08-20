@@ -1,76 +1,84 @@
-# Product Strategy — Physics Tutoring in Kuwait
+# Product Strategy — an IGCSE learning hub built on one teacher's library
 
 *The thinking behind every design decision in this codebase.*
 
-## 1. What business is this, really?
+## 1. The trap we deliberately avoided
 
-This is **not** a marketplace and must not look like one. The teacher's entire
-moat is personal trust: parents in Kuwait choose a private tutor through word
-of mouth, and the website's job is to **convert an existing reputation into
-bookings** — not to compete on a platform. So the site is built like a personal
-brand: the teacher's name, philosophy ("نفهم قبل ما نحفظ"), results, and social
-proof front and center. One teacher, one voice, zero platform-feel.
+The stated vision — "a hub where students and teachers use my resources and
+collaborate" — describes a two-sided marketplace. Two-sided marketplaces die of
+cold start: no teachers because no students, no students because no content, and
+an empty site that serves nobody. Worse, chasing "platform" dilutes the thing
+that actually pays: her lessons.
 
-## 2. The one metric that matters
+But she has the one asset most new tutors don't: **a library of finished
+material** (PowerPoints, lesson plans, worksheets). That library is the wedge —
+it lets her publish real value on day one, before she has a single student.
 
-**Time from "I heard he's good" → confirmed lesson.** Today that funnel is:
-get the number from a friend → WhatsApp back-and-forth ("متى فاضي؟" ×5) →
-maybe a lesson. Every step loses people. The site collapses it to:
-open link → pick a real slot → type name + WhatsApp → done. Target: **under 60
-seconds, on a phone, with no account.**
+## 2. The sequence: assets → audience → bookings → network
 
-Design consequences:
-- **No student accounts.** Passwords kill conversion and add nothing — the
-  booking code (`PHY-XXXXX`) is the student's "account". Identity is the phone
-  number, which doubles as the CRM key.
-- **Real availability, not a contact form.** Showing the actual free slots is
-  the single biggest UX upgrade over "leave your number and we'll call you".
-- **WhatsApp as the notification layer.** Kuwait runs on WhatsApp. Instead of
-  building SMS/email infra, every touchpoint deep-links into a pre-filled
-  WhatsApp message (student→teacher and teacher→student). Zero cost, 100%
-  open rate, and it's where the relationship lives anyway.
+**Layer 1 — the library is the top of the funnel, not the product.**
+A student searching "مراجعة الكهرباء IGCSE" finds her file, downloads it, sees
+who wrote it, and books a lesson. Every resource page cross-sells a lesson with
+the author. Resources are marketing that happens to be genuinely useful.
 
-## 3. Trust asymmetry: protect the teacher's calendar
+**Layer 2 — gating buys identity, not revenue.**
+Four tiers on every file:
 
-A tutor's inventory is hours. A no-show costs real money. Hence the
-**request → confirm** model by default: the student picks a slot, the teacher
-taps "تأكيد" and the slot is locked (with an **auto-confirm** toggle once trust
-in the system grows). Slots also enforce a configurable lead time (default 3h)
-so nobody books a lesson starting in 20 minutes.
+| Tier | Who | Why |
+| --- | --- | --- |
+| `public` — مجاني | anyone, no account | must be shareable in WhatsApp groups; this is the growth engine |
+| `member` — للأعضاء | free account | converts anonymous downloaders into a contactable lead list |
+| `student` — لطلابي | anyone with a confirmed lesson | rewards paying students; **unlocks automatically**, no admin work |
+| `teacher` — للمعلمين | approved network teachers | lesson plans and schemes of work that shouldn't reach students |
 
-Payment stays **off-platform deliberately** (KNET link / cash after
-confirmation). Zero payment friction at booking time, no PCI scope, and it
-matches how tutoring money already moves in Kuwait. Phase 2 can add MyFatoorah
-/ Tap payment links once volume justifies it.
+The student tier is computed from bookings, not assigned by hand — the teacher
+never maintains a list.
 
-## 4. The teacher is the second user — on a phone
+**Layer 3 — the network is curated, not open.**
+Teachers *apply*; she approves. Approved teachers unlock the teacher shelf and
+may contribute files **that she reviews before anything is published**. Open UGC
+would mean no supply, no trust, and a moderation burden on a working teacher.
+A review queue is the only model one person can actually sustain — and editorial
+control is what keeps the library worth visiting. It also creates referral flow:
+teachers who are full send students to her.
 
-Every admin surface assumes the teacher is between lessons with 90 seconds of
-attention: pending requests at the top of the dashboard with one-tap
-confirm/decline, bottom tab bar on mobile, income and load visible at a glance,
-and a "حصص تحتاج إغلاق" nudge so completed lessons get marked (which feeds the
-income stats and the per-student history). The CRM builds itself from
-bookings — the teacher never does data entry.
+**Layer 4 — lessons stay the business.** The hub exists to produce bookings.
 
-## 5. Positioning details that matter locally
+## 3. Why no "collaboration features" (yet)
 
-- **Arabic-first, RTL-native, Kuwaiti tone** — not translated-feeling Arabic.
-  Kuwaiti dialect in the marketing copy ("ليش تدرس معي؟"), formal Arabic in
-  transactional text.
-- Eastern Arabic numerals (٨ د.ك), Kuwait weekend (Fri/Sat), evening-heavy
-  default schedule (tutoring happens after school), prices in KWD.
-- Curriculum labels parents recognize: وزارة التربية (علمي ١٠–١٢), IGCSE, SAT.
-- The trial-lesson guarantee ("أول حصة أونلاين ما تعجبك؟ ما تدفع") converts
-  fence-sitters and costs almost nothing.
+Chat, forums, shared folders, and co-editing all sound like collaboration but
+each needs critical mass to not feel abandoned. Real collaboration v1 is
+narrower and it ships: a teacher submits a file, the owner reviews it, it gets
+published under the contributor's name on a public network page. That is a
+complete loop with two people in it — it works at n=2 and still works at n=50.
 
-## 6. Roadmap (deliberately not built yet)
+## 4. Friction budget
 
-1. **Payments**: MyFatoorah/Tap KNET links attached to confirmations.
-2. **Packages/subscriptions**: 8-lesson bundles with per-student balance.
-3. **Reminders**: WhatsApp Business API for automated 24h/2h reminders.
-4. **Group scheduling**: named cohorts with per-cohort capacity.
-5. **Content moat**: past-paper solutions in Arabic → SEO → inbound students
-   the teacher doesn't already know.
+- **Booking stays account-free.** A booking code is the student's "account".
+- **Accounts exist only where they buy something** — unlocking a tier.
+- **Browsing and public downloads never require login**, because SEO and
+  WhatsApp sharing are the distribution channels.
+- **Owner admin must be phone-sized**: approve a teacher, publish a file, or
+  confirm a lesson in one tap, between classes.
 
-The rule for all of it: nothing gets added that makes the first booking take
-longer than a minute.
+## 5. Local specifics
+
+Arabic-first and RTL-native with Kuwaiti dialect in marketing copy and formal
+Arabic in transactional text; Eastern Arabic numerals; KWD pricing; Kuwaiti
+weekend (Fri/Sat) with evening-heavy default availability; WhatsApp as the
+notification layer (100% open rate, zero infrastructure); curriculum labels
+parents recognize (IGCSE, AS/A Level, Checkpoint).
+
+## 6. Roadmap, in order
+
+1. **Payments** — MyFatoorah/Tap KNET links attached to booking confirmations.
+2. **Resource packs** — paid bundles, the natural first digital product.
+3. **Automated reminders** — WhatsApp Business API, 24h and 2h before lessons.
+4. **SEO content** — Arabic past-paper walkthroughs; this is the compounding
+   channel that brings students she doesn't already know.
+5. **Teacher subscriptions** — once the teacher shelf is thick enough to be
+   worth paying for.
+6. **Cohorts/courses** — recurring group classes with capacity.
+
+The rule for all of it: nothing may make the first download, or the first
+booking, take longer than it does today.

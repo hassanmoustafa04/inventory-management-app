@@ -2,6 +2,7 @@ import Link from 'next/link';
 import BookingRow from '@/components/BookingRow';
 import { Booking, getDb, getSetting } from '@/lib/db';
 import { addDays, fmtDateAr, fmtKWD, fmtNumAr, nowMinutesKW, todayKW, toMinutes } from '@/lib/kwtime';
+import { Resource, typeLabel } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,17 @@ export default function TeacherHome() {
       "SELECT COALESCE(SUM(price_kwd), 0) AS s FROM bookings WHERE status IN ('confirmed','completed') AND date >= ? AND date <= ?"
     )
     .get(monthStart, addDays(monthStart, 31)) as { s: number };
+
+  const lib = db
+    .prepare("SELECT COUNT(*) AS files, COALESCE(SUM(downloads),0) AS dl FROM resources WHERE status = 'published'")
+    .get() as { files: number; dl: number };
+  const pendingReview =
+    ((db.prepare("SELECT COUNT(*) AS c FROM resources WHERE status = 'pending'").get() as { c: number }).c) +
+    ((db.prepare("SELECT COUNT(*) AS c FROM members WHERE role = 'teacher' AND status = 'pending'").get() as { c: number }).c);
+  const topResources = db
+    .prepare("SELECT * FROM resources WHERE status = 'published' ORDER BY downloads DESC LIMIT 5")
+    .all() as Resource[];
+  const memberCount = (db.prepare('SELECT COUNT(*) AS c FROM members').get() as { c: number }).c;
 
   // Confirmed lessons whose time has passed and still need to be marked completed.
   const needClosing = db
@@ -69,6 +81,25 @@ export default function TeacherHome() {
         </div>
       </div>
 
+      <div className="tiles">
+        <div className="tile tile-navy">
+          <div className="t-label">ملفات المكتبة</div>
+          <div className="t-value">{fmtNumAr(lib.files)}</div>
+        </div>
+        <div className="tile tile-blue">
+          <div className="t-label">إجمالي التحميلات</div>
+          <div className="t-value">{fmtNumAr(lib.dl)}</div>
+        </div>
+        <div className="tile tile-green">
+          <div className="t-label">الأعضاء المسجّلون</div>
+          <div className="t-value">{fmtNumAr(memberCount)}</div>
+        </div>
+        <Link href="/teacher/review" className={`tile ${pendingReview > 0 ? 'tile-amber' : 'tile-navy'}`}>
+          <div className="t-label">بانتظار المراجعة</div>
+          <div className="t-value">{fmtNumAr(pendingReview)}</div>
+        </Link>
+      </div>
+
       {pending.length > 0 && (
         <section style={{ marginBottom: 30 }}>
           <h2 style={{ fontWeight: 900, fontSize: '1.1rem', marginBottom: 12 }}>
@@ -91,6 +122,25 @@ export default function TeacherHome() {
           todays.map((b) => <BookingRow key={b.id} booking={b} isPast={isPast(b)} />)
         )}
       </section>
+
+      {topResources.length > 0 && (
+        <section style={{ marginBottom: 30 }}>
+          <div className="spread" style={{ marginBottom: 12 }}>
+            <h2 style={{ fontWeight: 900, fontSize: '1.1rem' }}>📚 الأكثر تحميلاً</h2>
+            <Link href="/teacher/resources" className="btn btn-sm btn-light">إدارة المكتبة</Link>
+          </div>
+          {topResources.map((r) => (
+            <div className="b-row" key={r.id}>
+              <span className="res-icon">{typeLabel(r.type).icon}</span>
+              <div className="b-info">
+                <b>{r.title}</b>
+                <div className="meta">{r.subject} · {r.level}</div>
+              </div>
+              <b>⬇ {fmtNumAr(r.downloads)}</b>
+            </div>
+          ))}
+        </section>
+      )}
 
       {needClosing.length > 0 && (
         <section>
