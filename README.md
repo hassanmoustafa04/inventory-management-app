@@ -82,3 +82,28 @@ persistent disk (Railway, Fly.io, a VPS). **Back up the whole `data/`
 directory** — it holds the database *and* every uploaded file.
 
 See [`PRODUCT.md`](./PRODUCT.md) for the strategy behind the design.
+
+## First-run setup (for the teacher)
+
+Log in at `/teacher/login` with the default password **`teacher123`**, then follow
+**التجهيز** (`/teacher/setup`) — a seven-step checklist whose progress is derived
+from real data, not tickboxes:
+
+1. Change the password (the default is public knowledge)
+2. Add the WhatsApp number — every contact button on the site uses it
+3. Write the bio shown on the landing page
+4. Set the weekly teaching hours, then confirm them
+5. Review prices and disable any package that doesn't apply
+6. Upload the first real files
+7. Delete the eight demo files that ship with the site
+
+The dashboard shows a progress banner until all seven are done.
+
+### Uploading many files at once
+
+`/teacher/resources/bulk` takes a whole folder of PowerPoints in one go: pick the
+subject, level, type, and access tier once, select every file, and each becomes a
+resource titled after its filename. They upload as **drafts** by default —
+invisible to the public until published from the library, so titles can be
+tidied first. Arabic filenames are preserved (multipart filenames arrive
+Latin-1-decoded and are repaired on the way in; see `repairFileName`).

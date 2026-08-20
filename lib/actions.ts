@@ -134,6 +134,7 @@ export async function saveSettingsAction(formData: FormData) {
   const normalized = normalizeKwPhone(whatsappRaw);
   if (normalized) setSetting('whatsapp', normalized);
   setSetting('auto_confirm', formData.get('auto_confirm') ? '1' : '0');
+  setSetting('setup_profile', '1');
   const lead = Number(formData.get('min_lead_hours'));
   if (Number.isFinite(lead) && lead >= 0 && lead <= 48) setSetting('min_lead_hours', String(lead));
   revalidatePath('/');
@@ -153,8 +154,10 @@ export async function saveOfferingAction(formData: FormData) {
   getDb()
     .prepare('UPDATE offerings SET price_kwd = ?, duration_min = ?, active = ? WHERE id = ?')
     .run(price, duration, active, id);
+  setSetting('setup_pricing', '1');
   revalidatePath('/');
   revalidatePath('/teacher/settings');
+  revalidatePath('/teacher/setup');
   redirect('/teacher/settings?msg=' + encodeURIComponent('تم تحديث الباقة'));
 }
 
@@ -399,4 +402,113 @@ export async function toggleStudentFlagAction(formData: FormData) {
   const id = Number(formData.get('id'));
   getDb().prepare('UPDATE members SET is_student = 1 - is_student WHERE id = ?').run(id);
   revalidatePath('/teacher/students');
+}
+
+// ============================================================
+//  Owner onboarding: bulk upload, drafts, sample cleanup
+// ============================================================
+
+/**
+ * Upload many files at once. Built for the common case of a teacher who already
+ * has a folder of PowerPoints: pick the shared details once, drop in the files,
+ * and each one becomes a resource titled after its filename.
+ */
+export async function bulkUploadAction(
+  _prev: { error: string; ok: string },
+  formData: FormData
+): Promise<{ error: string; ok: string }> {
+  requireTeacher();
+  const subject = String(formData.get('subject') ?? '');
+  const level = String(formData.get('level') ?? '');
+  const type = String(formData.get('type') ?? '');
+  const access = String(formData.get('access') ?? 'public') as ResourceAccess;
+  const asDraft = Boolean(formData.get('as_draft'));
+
+  const fields = { title: 'placeholder', description: '', subject, level, type, access };
+  const invalid = validateResourceFields(fields);
+  if (invalid && !invalid.includes('عنوان')) return { error: invalid, ok: '' };
+
+  const files = formData.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) return { error: 'اختاري ملفاً واحداً على الأقل', ok: '' };
+
+  const db = getDb();
+  const insert = db.prepare(
+    `INSERT INTO resources
+       (slug, title, description, subject, level, type, access, file_name, file_path,
+        file_size, mime, status, author_id, author_name, is_sample)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 0)`
+  );
+
+  const authorName = getSetting('teacher_name');
+  const status = asDraft ? 'draft' : 'published';
+  let saved = 0;
+  const failures: string[] = [];
+
+  for (const file of files) {
+    try {
+      const stored = await saveUpload(file);
+      const title = stored.fileName.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+      insert.run(
+        slugify(title), title || stored.fileName, '', subject, level, type, access,
+        stored.fileName, stored.storedName, stored.size, stored.mime, status, authorName
+      );
+      saved++;
+    } catch (e) {
+      failures.push(`${file.name}: ${e instanceof Error ? e.message : 'خطأ'}`);
+    }
+  }
+
+  revalidatePath('/resources');
+  revalidatePath('/teacher/resources');
+  revalidatePath('/teacher');
+
+  if (saved === 0) return { error: failures.join(' — ') || 'تعذر رفع الملفات', ok: '' };
+  const note = failures.length ? ` (تعذر رفع ${failures.length}: ${failures.join('، ')})` : '';
+  redirect(
+    '/teacher/resources?msg=' +
+      encodeURIComponent(
+        `تم رفع ${saved} ملف${asDraft ? ' كمسودة — راجعي العناوين ثم انشريها' : ''}${note}`
+      )
+  );
+}
+
+export async function toggleResourceStatusAction(formData: FormData) {
+  requireTeacher();
+  const id = Number(formData.get('id'));
+  const db = getDb();
+  const res = db.prepare('SELECT status FROM resources WHERE id = ?').get(id) as
+    | { status: string } | undefined;
+  if (!res || !['published', 'draft'].includes(res.status)) return;
+  db.prepare('UPDATE resources SET status = ? WHERE id = ?')
+    .run(res.status === 'published' ? 'draft' : 'published', id);
+  revalidatePath('/resources');
+  revalidatePath('/teacher/resources');
+}
+
+/** Remove every demo file that shipped with the site, and its stored file. */
+export async function deleteSamplesAction() {
+  requireTeacher();
+  const db = getDb();
+  const samples = db.prepare('SELECT * FROM resources WHERE is_sample = 1').all() as Resource[];
+  const tx = db.transaction(() => {
+    for (const r of samples) {
+      db.prepare('DELETE FROM resource_downloads WHERE resource_id = ?').run(r.id);
+      db.prepare('DELETE FROM resources WHERE id = ?').run(r.id);
+    }
+  });
+  tx();
+  for (const r of samples) deleteStoredFile(r.file_path);
+  revalidatePath('/resources');
+  revalidatePath('/teacher/resources');
+  revalidatePath('/teacher/setup');
+  redirect('/teacher/resources?msg=' + encodeURIComponent(`تم حذف ${samples.length} ملف تجريبي`));
+}
+
+/** Teacher confirms her weekly hours are correct (setup checklist step). */
+export async function confirmScheduleAction() {
+  requireTeacher();
+  setSetting('setup_schedule', '1');
+  revalidatePath('/teacher/schedule');
+  revalidatePath('/teacher/setup');
+  redirect('/teacher/schedule?msg=' + encodeURIComponent('تم تأكيد جدولك ✅'));
 }

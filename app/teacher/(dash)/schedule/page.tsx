@@ -1,9 +1,11 @@
 import {
   addRuleAction,
   blockDateAction,
+  confirmScheduleAction,
   deleteRuleAction,
   unblockDateAction,
 } from '@/lib/actions';
+import { getSetting } from '@/lib/db';
 import { AvailabilityRule, getDb } from '@/lib/db';
 import { fmtDateAr, fmtTimeAr, todayKW, WEEKDAYS_AR } from '@/lib/kwtime';
 
@@ -35,6 +37,15 @@ export default function SchedulePage({ searchParams }: { searchParams: { msg?: s
       </div>
 
       {searchParams.msg && <div className="form-ok">{searchParams.msg}</div>}
+
+      {getSetting('setup_schedule') !== '1' && (
+        <div className="notice spread">
+          <span>هذي أوقات افتراضية — عدّليها لتطابق جدولك، وبعدين أكّديها.</span>
+          <form action={confirmScheduleAction}>
+            <button type="submit" className="btn btn-sm btn-navy">✓ جدولي صحيح</button>
+          </form>
+        </div>
+      )}
 
       <section style={{ marginBottom: 34 }}>
         <h2 style={{ fontWeight: 900, fontSize: '1.1rem', marginBottom: 12 }}>🗓️ الجدول الأسبوعي</h2>

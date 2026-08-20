@@ -1,5 +1,10 @@
 import Link from 'next/link';
-import { deleteResourceAction, updateResourceAction } from '@/lib/actions';
+import {
+  deleteResourceAction,
+  deleteSamplesAction,
+  toggleResourceStatusAction,
+  updateResourceAction,
+} from '@/lib/actions';
 import { ACCESS_LABELS, getDb, Resource, typeLabel } from '@/lib/db';
 import { ACCESS_OPTIONS, LEVELS, RESOURCE_TYPES, SUBJECTS } from '@/lib/constants';
 import { fmtFileSize } from '@/lib/resources';
@@ -14,13 +19,15 @@ export default function OwnerResourcesPage({
 }) {
   const db = getDb();
   const resources = db
-    .prepare("SELECT * FROM resources WHERE status != 'pending' ORDER BY featured DESC, id DESC")
+    .prepare("SELECT * FROM resources WHERE status != 'pending' ORDER BY status = 'draft' DESC, featured DESC, id DESC")
     .all() as Resource[];
   const editing = searchParams.edit
     ? (db.prepare('SELECT * FROM resources WHERE id = ?').get(Number(searchParams.edit)) as Resource | undefined)
     : undefined;
 
   const totalDownloads = resources.reduce((s, r) => s + r.downloads, 0);
+  const sampleCount = resources.filter((r) => r.is_sample === 1).length;
+  const draftCount = resources.filter((r) => r.status === 'draft').length;
 
   return (
     <>
@@ -28,13 +35,29 @@ export default function OwnerResourcesPage({
         <div>
           <h1>المكتبة</h1>
           <div className="sub">
-            {fmtNumAr(resources.length)} ملف · {fmtNumAr(totalDownloads)} تحميل إجمالي
+            {fmtNumAr(resources.length)} ملف
+            {draftCount > 0 && ` · ${fmtNumAr(draftCount)} مسودة`}
+            {' '}· {fmtNumAr(totalDownloads)} تحميل إجمالي
           </div>
         </div>
-        <Link href="/teacher/resources/new" className="btn btn-navy btn-sm">➕ أضف ملفاً</Link>
+        <div className="row-flex">
+          <Link href="/teacher/resources/bulk" className="btn btn-light btn-sm">📁 رفع مجموعة</Link>
+          <Link href="/teacher/resources/new" className="btn btn-navy btn-sm">➕ أضف ملفاً</Link>
+        </div>
       </div>
 
       {searchParams.msg && <div className="form-ok">{searchParams.msg}</div>}
+
+      {sampleCount > 0 && (
+        <div className="notice spread">
+          <span>
+            المكتبة فيها {fmtNumAr(sampleCount)} ملف تجريبي جاي مع الموقع — احذفيها بعد ما ترفعين ملفاتك.
+          </span>
+          <form action={deleteSamplesAction}>
+            <button type="submit" className="btn btn-sm btn-red-soft">حذف الملفات التجريبية</button>
+          </form>
+        </div>
+      )}
       {searchParams.err && <div className="form-error">{searchParams.err}</div>}
 
       {editing && (
@@ -124,12 +147,28 @@ export default function OwnerResourcesPage({
                   <td><span className={`badge ${ACCESS_LABELS[r.access].cls}`}>{ACCESS_LABELS[r.access].short}</span></td>
                   <td>{fmtNumAr(r.downloads)}</td>
                   <td>
-                    <span className={`badge badge-${r.status === 'published' ? 'confirmed' : 'declined'}`}>
-                      {r.status === 'published' ? 'منشور' : 'مرفوض'}
+                    <span
+                      className={`badge badge-${
+                        r.status === 'published' ? 'confirmed' : r.status === 'draft' ? 'pending' : 'declined'
+                      }`}
+                    >
+                      {r.status === 'published' ? 'منشور' : r.status === 'draft' ? 'مسودة' : 'مرفوض'}
                     </span>
+                    {r.is_sample === 1 && <div className="muted small">تجريبي</div>}
                   </td>
                   <td>
                     <div className="row-flex" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                      {(r.status === 'published' || r.status === 'draft') && (
+                        <form action={toggleResourceStatusAction}>
+                          <input type="hidden" name="id" value={r.id} />
+                          <button
+                            type="submit"
+                            className={`btn btn-sm ${r.status === 'draft' ? 'btn-green' : 'btn-light'}`}
+                          >
+                            {r.status === 'draft' ? '✓ نشر' : 'إخفاء'}
+                          </button>
+                        </form>
+                      )}
                       <Link href={`/teacher/resources?edit=${r.id}`} className="btn btn-sm btn-light">تعديل</Link>
                       <Link href={`/resources/${r.slug}`} className="btn btn-sm btn-light">عرض</Link>
                       <form action={deleteResourceAction}>

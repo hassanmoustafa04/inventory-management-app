@@ -977,3 +977,92 @@ a.tile:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
   .res-search { flex-direction: column; }
   .teach-cta { flex-direction: column; align-items: stretch; text-align: center; }
 }
+
+/* ============ Setup checklist ============ */
+.progress {
+  height: 10px;
+  background: var(--gray-soft);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--amber), var(--green));
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+.setup-step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-soft);
+}
+.setup-step.done { opacity: 0.68; }
+.setup-step .step-mark {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--gray-soft);
+  color: var(--ink-3);
+  font-weight: 900;
+  flex: none;
+}
+.setup-step.done .step-mark { background: var(--green-soft); color: var(--green); }
+.setup-step .step-body { flex: 1; min-width: 160px; }
+.setup-step .step-body b { display: block; font-size: 1rem; }
+.setup-step .step-body p { color: var(--ink-3); font-size: 0.86rem; margin: 2px 0 0; }
+.setup-step .req {
+  display: inline-block;
+  background: var(--red-soft);
+  color: var(--red);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  padding: 1px 9px;
+  margin-inline-start: 8px;
+  vertical-align: middle;
+}
+.setup-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(140deg, #12294a, #0b1b33);
+  color: #fff;
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.setup-banner .grow { flex: 1; min-width: 200px; }
+.setup-banner h3 { font-size: 1.05rem; font-weight: 900; margin-bottom: 4px; }
+.setup-banner p { color: rgba(255, 255, 255, 0.72); font-size: 0.88rem; margin: 0 0 10px; }
+.setup-banner .progress { background: rgba(255, 255, 255, 0.15); }
+ul.tips { padding-inline-start: 20px; }
+ul.tips li { color: var(--ink-2); font-size: 0.9rem; margin-bottom: 10px; }
+ul.tips li b { color: var(--ink); }
+
+.bulk-drop {
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 26px 20px;
+  text-align: center;
+  background: var(--bg);
+}
+.bulk-drop:hover { border-color: var(--amber); }
+.mode-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+.mode-tabs a {
+  flex: 1;
+  text-align: center;
+  border-radius: 12px;
+  padding: 10px;
+  font-weight: 800;
+  font-size: 0.92rem;
+  background: var(--bg);
+  color: var(--ink-3);
+  border: 1.5px solid var(--line);
+}
+.mode-tabs a.on { background: var(--navy); border-color: var(--navy); color: var(--amber); }

@@ -84,6 +84,18 @@ export function slugify(title: string): string {
 
 export type SavedFile = { fileName: string; storedName: string; size: number; mime: string };
 
+/**
+ * Repair a filename that arrived as UTF-8 bytes decoded as Latin-1 — the shape
+ * multipart filenames come through in, which turns an Arabic name into
+ * mojibake. The round-trip check leaves a genuinely Latin-1 name untouched.
+ */
+export function repairFileName(name: string): string {
+  if (!/[\u0080-\u00FF]/.test(name)) return name;
+  const repaired = Buffer.from(name, 'latin1').toString('utf8');
+  if (repaired.includes('\uFFFD')) return name;
+  return Buffer.from(repaired, 'utf8').toString('latin1') === name ? repaired : name;
+}
+
 /** Validate and persist an uploaded file. Throws Error with an Arabic message on failure. */
 export async function saveUpload(file: File): Promise<SavedFile> {
   if (!file || typeof file.arrayBuffer !== 'function' || file.size === 0) {
@@ -92,7 +104,7 @@ export async function saveUpload(file: File): Promise<SavedFile> {
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new Error('حجم الملف كبير — الحد الأقصى ٢٥ ميجابايت');
   }
-  const original = path.basename(file.name || 'file');
+  const original = repairFileName(path.basename(file.name || 'file'));
   const ext = original.split('.').pop()?.toLowerCase() ?? '';
   const mime = ALLOWED_EXT[ext];
   if (!mime) {

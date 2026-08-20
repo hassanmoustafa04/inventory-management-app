@@ -16,6 +16,11 @@ export default function NewResourcePage() {
         </div>
         <Link href="/teacher/resources" className="btn btn-sm btn-light">رجوع</Link>
       </div>
+      <div className="mode-tabs">
+        <Link href="/teacher/resources/new" className="on">ملف واحد بتفاصيله</Link>
+        <Link href="/teacher/resources/bulk">مجموعة ملفات</Link>
+      </div>
+
       <div className="card">
         {state.error && <div className="form-error">{state.error}</div>}
         <form action={formAction}>

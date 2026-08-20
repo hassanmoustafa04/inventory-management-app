@@ -3,6 +3,7 @@ import BookingRow from '@/components/BookingRow';
 import { Booking, getDb, getSetting } from '@/lib/db';
 import { addDays, fmtDateAr, fmtKWD, fmtNumAr, nowMinutesKW, todayKW, toMinutes } from '@/lib/kwtime';
 import { Resource, typeLabel } from '@/lib/db';
+import { setupProgress } from '@/lib/setup';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,8 +51,25 @@ export default function TeacherHome() {
   const isPast = (b: Booking) =>
     b.date < today || (b.date === today && toMinutes(b.time) + b.duration_min <= nowMin);
 
+  const setup = setupProgress();
+  const setupPct = Math.round((setup.done / setup.total) * 100);
+
   return (
     <>
+      {!setup.complete && (
+        <div className="setup-banner">
+          <div className="grow">
+            <h3>🚀 خلّصي تجهيز موقعك</h3>
+            <p>
+              أنجزتِ {fmtNumAr(setup.done)} من {fmtNumAr(setup.total)} خطوات
+              {setup.blockers > 0 && ` — باقي ${fmtNumAr(setup.blockers)} خطوة مهمة`}
+            </p>
+            <div className="progress"><span style={{ width: `${setupPct}%` }} /></div>
+          </div>
+          <Link href="/teacher/setup" className="btn btn-primary">أكملي التجهيز</Link>
+        </div>
+      )}
+
       <div className="page-head">
         <div>
           <h1>مرحباً، {getSetting('teacher_name')} 👋</h1>

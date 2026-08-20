@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 
 const ITEMS = [
   { href: '/teacher', icon: '🏠', label: 'الرئيسية' },
+  { href: '/teacher/setup', icon: '🚀', label: 'التجهيز' },
   { href: '/teacher/bookings', icon: '📋', label: 'الحجوزات' },
   { href: '/teacher/schedule', icon: '🗓️', label: 'جدول أوقاتي' },
   { href: '/teacher/resources', icon: '📚', label: 'المكتبة' },

@@ -6,6 +6,49 @@ import crypto from 'crypto';
 const DATA_DIR = path.join(process.cwd(), 'data');
 export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 
+const RESOURCES_DDL = `
+CREATE TABLE IF NOT EXISTS resources (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug         TEXT UNIQUE NOT NULL,
+  title        TEXT NOT NULL,
+  description  TEXT NOT NULL DEFAULT '',
+  subject      TEXT NOT NULL,
+  level        TEXT NOT NULL,
+  type         TEXT NOT NULL,
+  access       TEXT NOT NULL DEFAULT 'public'
+               CHECK (access IN ('public','member','student','teacher')),
+  file_name    TEXT NOT NULL,
+  file_path    TEXT NOT NULL,
+  file_size    INTEGER NOT NULL DEFAULT 0,
+  mime         TEXT NOT NULL DEFAULT 'application/octet-stream',
+  downloads    INTEGER NOT NULL DEFAULT 0,
+  status       TEXT NOT NULL DEFAULT 'published'
+               CHECK (status IN ('published','draft','pending','rejected')),
+  author_id    INTEGER REFERENCES members(id),
+  author_name  TEXT NOT NULL DEFAULT '',
+  featured     INTEGER NOT NULL DEFAULT 0,
+  review_note  TEXT NOT NULL DEFAULT '',
+  is_sample    INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`;
+
+const RESOURCE_INDEXES = `
+CREATE INDEX IF NOT EXISTS idx_resources_status ON resources(status);
+CREATE INDEX IF NOT EXISTS idx_resources_subject ON resources(subject);
+`;
+
+const SAMPLE_SLUGS = [
+  'igcse-physics-electricity-slides',
+  'igcse-physics-waves-notes',
+  'igcse-physics-forces-slides',
+  'igcse-physics-thermal-worksheet',
+  'igcse-physics-past-paper-pack',
+  'scheme-of-work-igcse-physics',
+  'lesson-plan-radioactivity',
+  'as-level-mechanics-slides',
+];
+
 function createDb(): Database.Database {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -84,33 +127,6 @@ function createDb(): Database.Database {
       created_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS resources (
-      id           INTEGER PRIMARY KEY AUTOINCREMENT,
-      slug         TEXT UNIQUE NOT NULL,
-      title        TEXT NOT NULL,
-      description  TEXT NOT NULL DEFAULT '',
-      subject      TEXT NOT NULL,
-      level        TEXT NOT NULL,
-      type         TEXT NOT NULL,
-      access       TEXT NOT NULL DEFAULT 'public'
-                   CHECK (access IN ('public','member','student','teacher')),
-      file_name    TEXT NOT NULL,
-      file_path    TEXT NOT NULL,
-      file_size    INTEGER NOT NULL DEFAULT 0,
-      mime         TEXT NOT NULL DEFAULT 'application/octet-stream',
-      downloads    INTEGER NOT NULL DEFAULT 0,
-      status       TEXT NOT NULL DEFAULT 'published'
-                   CHECK (status IN ('published','pending','rejected')),
-      author_id    INTEGER REFERENCES members(id),
-      author_name  TEXT NOT NULL DEFAULT '',
-      featured     INTEGER NOT NULL DEFAULT 0,
-      review_note  TEXT NOT NULL DEFAULT '',
-      created_at   TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_resources_status ON resources(status);
-    CREATE INDEX IF NOT EXISTS idx_resources_subject ON resources(subject);
-
     CREATE TABLE IF NOT EXISTS resource_downloads (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
@@ -119,8 +135,37 @@ function createDb(): Database.Database {
     );
   `);
 
+  db.exec(RESOURCES_DDL);
+  migrate(db);
+  db.exec(RESOURCE_INDEXES);
   seed(db);
   return db;
+}
+
+/** Bring pre-existing databases up to the current resources schema. */
+function migrate(db: Database.Database) {
+  const row = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='resources'")
+    .get() as { sql: string } | undefined;
+  if (!row) return;
+  if (row.sql.includes("'draft'") && row.sql.includes('is_sample')) return;
+
+  const cols = [
+    'id', 'slug', 'title', 'description', 'subject', 'level', 'type', 'access',
+    'file_name', 'file_path', 'file_size', 'mime', 'downloads', 'status',
+    'author_id', 'author_name', 'featured', 'review_note', 'created_at',
+  ].join(', ');
+
+  db.pragma('foreign_keys = OFF');
+  db.transaction(() => {
+    db.exec('ALTER TABLE resources RENAME TO resources_old');
+    db.exec(RESOURCES_DDL);
+    db.exec(`INSERT INTO resources (${cols}) SELECT ${cols} FROM resources_old`);
+    db.exec('DROP TABLE resources_old');
+    const mark = db.prepare('UPDATE resources SET is_sample = 1 WHERE slug = ?');
+    for (const slug of SAMPLE_SLUGS) mark.run(slug);
+  })();
+  db.pragma('foreign_keys = ON');
 }
 
 // ---------------- seed ----------------
@@ -247,8 +292,8 @@ function seedResources(db: Database.Database) {
   const ins = db.prepare(
     `INSERT INTO resources
        (slug, title, description, subject, level, type, access, file_name, file_path,
-        file_size, mime, status, author_id, author_name, featured)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'application/pdf', 'published', NULL, ?, ?)`
+        file_size, mime, status, author_id, author_name, featured, is_sample)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'application/pdf', 'published', NULL, ?, ?, 1)`
   );
 
   for (const s of samples) {
@@ -348,9 +393,9 @@ export type Resource = {
   id: number; slug: string; title: string; description: string;
   subject: string; level: string; type: string; access: ResourceAccess;
   file_name: string; file_path: string; file_size: number; mime: string;
-  downloads: number; status: 'published' | 'pending' | 'rejected';
+  downloads: number; status: 'published' | 'draft' | 'pending' | 'rejected';
   author_id: number | null; author_name: string; featured: number;
-  review_note: string; created_at: string;
+  review_note: string; is_sample: number; created_at: string;
 };
 
 // ---------------- taxonomy ----------------
