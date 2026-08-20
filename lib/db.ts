@@ -129,7 +129,7 @@ function seed(db: Database.Database) {
   const hasSettings = db.prepare('SELECT COUNT(*) AS c FROM settings').get() as { c: number };
   if (hasSettings.c === 0) {
     const defaults: Record<string, string> = {
-      teacher_name: 'أ. هدى العلي',
+      teacher_name: 'أ. منى مرسي',
       tagline: 'معلمة علوم — IGCSE و A Level',
       whatsapp: '96550000000',
       location: 'السالمية — حولي، الكويت',
