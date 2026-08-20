@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'فيزياء مع أ. حسن — دروس خصوصية في الكويت',
+  title: 'فيزياء IGCSE مع أ. منى مرسي — مكتبة ودروس خصوصية في الكويت',
   description:
-    'دروس فيزياء خصوصية في الكويت — أونلاين وحضورياً. احجز حصتك في أقل من دقيقة، لمناهج وزارة التربية و IGCSE.',
+    'مكتبة فيزياء IGCSE مجانية — عروض تقديمية وخطط دروس وأوراق عمل، ودروس خصوصية أونلاين وحضورياً في الكويت.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

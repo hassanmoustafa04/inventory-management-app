@@ -130,16 +130,16 @@ function seed(db: Database.Database) {
   if (hasSettings.c === 0) {
     const defaults: Record<string, string> = {
       teacher_name: 'أ. منى مرسي',
-      tagline: 'معلمة علوم — IGCSE و A Level',
+      tagline: 'معلمة فيزياء — IGCSE و A Level',
       whatsapp: '96550000000',
       location: 'السالمية — حولي، الكويت',
-      bio: 'معلمة علوم بخبرة تدريس طويلة لمناهج IGCSE و A Level. أشارك هنا عروضي التقديمية وخطط دروسي مجاناً، وأعطي حصصاً خصوصية للطلاب الجادين.',
+      bio: 'معلمة فيزياء لمناهج IGCSE و A Level. أشارك هنا عروضي التقديمية وخطط دروسي وأوراق العمل مجاناً، وأعطي حصصاً خصوصية للطلاب اللي يبون يفهمون الفيزياء — مو يحفظونها.',
       auto_confirm: '0',
       password_hash: sha256('teacher123'),
       min_lead_hours: '3',
       horizon_days: '21',
       hub_intro:
-        'مكتبة مفتوحة من العروض التقديمية وخطط الدروس وأوراق العمل لمناهج IGCSE — للطلاب وللمعلمين.',
+        'مكتبة مفتوحة من عروض الفيزياء وخطط الدروس وأوراق العمل لمناهج IGCSE و A Level — للطلاب وللمعلمين.',
     };
     const ins = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
     for (const [k, v] of Object.entries(defaults)) ins.run(k, v);
@@ -201,18 +201,18 @@ function seedResources(db: Database.Database) {
       subject: 'الفيزياء', level: 'IGCSE', type: 'notes', access: 'public',
     },
     {
-      slug: 'igcse-chemistry-bonding-slides',
-      title: 'الروابط الكيميائية — عرض تقديمي',
+      slug: 'igcse-physics-forces-slides',
+      title: 'القوى والحركة — عرض تقديمي',
       description:
-        'شرح مبسّط للروابط الأيونية والتساهمية والفلزية مع رسومات توضيحية لتوزيع الإلكترونات، ومقارنة بين خصائص كل نوع.',
-      subject: 'الكيمياء', level: 'IGCSE', type: 'presentation', access: 'public',
+        'قوانين نيوتن الثلاثة، السرعة والتسارع، وقراءة الرسوم البيانية للحركة — مع تجارب توضيحية وأمثلة من الحياة اليومية.',
+      subject: 'الفيزياء', level: 'IGCSE', type: 'presentation', access: 'public',
     },
     {
-      slug: 'igcse-biology-transport-worksheet',
-      title: 'النقل في النبات — ورقة عمل مع نموذج الإجابة',
+      slug: 'igcse-physics-thermal-worksheet',
+      title: 'الحرارة وانتقال الطاقة — ورقة عمل مع نموذج الإجابة',
       description:
-        'ورقة عمل من ٢٠ سؤالاً على وحدة النقل في النبات (النتح، الخاصية الشعرية، اللحاء والخشب) مع نموذج إجابة كامل في النهاية.',
-      subject: 'الأحياء', level: 'IGCSE', type: 'worksheet', access: 'member',
+        'ورقة عمل من ٢٠ سؤالاً على التوصيل والحمل والإشعاع، والسعة الحرارية، وتغيّر الحالة — مع نموذج إجابة كامل في النهاية.',
+      subject: 'الفيزياء', level: 'IGCSE', type: 'worksheet', access: 'member',
     },
     {
       slug: 'igcse-physics-past-paper-pack',
@@ -229,10 +229,10 @@ function seedResources(db: Database.Database) {
       subject: 'الفيزياء', level: 'IGCSE', type: 'lesson_plan', access: 'teacher',
     },
     {
-      slug: 'lesson-plan-forces-motion',
-      title: 'خطة درس — القوى والحركة (٥٠ دقيقة)',
+      slug: 'lesson-plan-radioactivity',
+      title: 'خطة درس — النشاط الإشعاعي (٥٠ دقيقة)',
       description:
-        'خطة درس تفصيلية لحصة واحدة عن قوانين نيوتن: التمهيد، النشاط الاستقصائي، أسئلة التقويم التكويني، والواجب المنزلي. مخصصة للمعلمين.',
+        'خطة درس تفصيلية عن أنواع الإشعاع وعمر النصف: التمهيد، النشاط الاستقصائي، أسئلة التقويم التكويني، والواجب المنزلي. مخصصة للمعلمين.',
       subject: 'الفيزياء', level: 'IGCSE', type: 'lesson_plan', access: 'teacher',
     },
     {

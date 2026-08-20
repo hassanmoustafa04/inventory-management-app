@@ -9,7 +9,7 @@ import { fmtNumAr } from '@/lib/kwtime';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = { title: 'مكتبة الموارد التعليمية — IGCSE' };
+export const metadata = { title: 'مكتبة الفيزياء — IGCSE و A Level' };
 
 type SP = { subject?: string; level?: string; type?: string; q?: string };
 
@@ -37,7 +37,7 @@ export default function ResourcesPage({ searchParams }: { searchParams: SP }) {
       <section className="page-hero">
         <div className="container">
           <span className="eyebrow">📚 المكتبة التعليمية</span>
-          <h1>عروض تقديمية، خطط دروس، وأوراق عمل — جاهزة للتحميل</h1>
+          <h1>عروض فيزياء، خطط دروس، وأوراق عمل — جاهزة للتحميل</h1>
           <p>{getSetting('hub_intro')}</p>
           <form className="res-search" action="/resources">
             {searchParams.subject && <input type="hidden" name="subject" value={searchParams.subject} />}
