@@ -15,8 +15,12 @@ host with a **persistent volume**. Railway is the quickest route to a working UR
 2. **New Project → Deploy from GitHub repo** → pick this repo and the branch
    `claude/physics-tuition-booking-arabic-1bo29k` (or `main` once merged).
    Railway detects Next.js and runs `npm ci && npm run build` on its own.
-3. Open the service → **Variables** → add nothing yet. (`SESSION_SECRET` is
-   optional: if unset, a secret is generated once and kept on the volume.)
+3. Open the service → **Variables** → add **`PORT` = `3000`**.
+   This matters: Railway otherwise injects its own port (often 8080) while the
+   generated domain routes to a different one, and the mismatch shows up as
+   *"Application failed to respond"*. `next start` follows `PORT`, so pinning it
+   makes both sides agree. (`SESSION_SECRET` is optional — if unset, a secret is
+   generated once and kept on the volume.)
 4. Open **Settings → Volumes → Add Volume**, mount path **`/app/data`**.
    This is the single step that matters — it is where the database and every
    uploaded file live. Without it, everything resets on each deploy.
@@ -43,6 +47,26 @@ fly volumes create data --size 3
 #   destination = "/data"
 fly deploy
 ```
+
+## Node version
+
+The runtime is pinned to **Node 22** via `.nvmrc` and `package.json` engines.
+This is deliberate: `better-sqlite3` downloads a prebuilt native binary at
+install time, and no prebuild exists for Node 24, so a newer runtime forces a
+source build that fails without a compiler toolchain. Railpack reads both files.
+
+## Troubleshooting
+
+**"Application failed to respond" (502)** — the container is not serving on the
+port the domain targets. Check `PORT` is set to `3000` in Variables and that the
+domain's target port is also `3000`.
+
+**Build fails immediately (a few seconds)** — usually the wrong branch. The app
+lives on `main`; older commits there had no `app/` directory and `next build`
+exits at once.
+
+**Build fails while installing `better-sqlite3`** — the Node version drifted off
+22. Confirm `.nvmrc` is present and the builder reports `node@22`.
 
 ## Storage settings
 
