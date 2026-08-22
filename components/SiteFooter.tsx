@@ -11,6 +11,8 @@ export default function SiteFooter() {
           <div className="small">📍 {s.location}</div>
         </div>
         <div className="row-flex">
+          <Link href="/curriculum">المناهج</Link>
+          <span style={{ opacity: 0.3 }}>|</span>
           <Link href="/resources">المكتبة</Link>
           <span style={{ opacity: 0.3 }}>|</span>
           <Link href="/teachers">شبكة المعلمين</Link>

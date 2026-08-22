@@ -44,7 +44,24 @@ teachers who are full send students to her.
 
 **Layer 4 — lessons stay the business.** The hub exists to produce bookings.
 
-## 3. Why no "collaboration features" (yet)
+## 3. Content splits; the platform does not
+
+Two curricula are taught side by side — the Kuwaiti government syllabus and
+Cambridge IGCSE — and they genuinely differ: one wants «المذكرة» and «بنك
+أسئلة», the other wants mark schemes and past questions split by Paper 1/3/6.
+So the *content* tree divides at the top: curriculum → grade or programme →
+unit/topic → lesson → typed sections.
+
+Everything else stays one system. Bookings, students, availability, payments
+and settings do not care which syllabus a student follows, and duplicating them
+would double the admin surface for one teacher. A student simply records a
+curriculum and a grade at registration.
+
+The section types are declared per curriculum rather than shared, because a
+half-relevant list is worse than two exact ones: the Cambridge lesson editor
+never offers «بنك أسئلة», and the Kuwaiti one never offers Paper 6.
+
+## 4. Why no "collaboration features" (yet)
 
 Chat, forums, shared folders, and co-editing all sound like collaboration but
 each needs critical mass to not feel abandoned. Real collaboration v1 is
@@ -52,7 +69,7 @@ narrower and it ships: a teacher submits a file, the owner reviews it, it gets
 published under the contributor's name on a public network page. That is a
 complete loop with two people in it — it works at n=2 and still works at n=50.
 
-## 4. Friction budget
+## 5. Friction budget
 
 - **Booking stays account-free.** A booking code is the student's "account".
 - **Accounts exist only where they buy something** — unlocking a tier.
@@ -61,7 +78,7 @@ complete loop with two people in it — it works at n=2 and still works at n=50.
 - **Owner admin must be phone-sized**: approve a teacher, publish a file, or
   confirm a lesson in one tap, between classes.
 
-## 5. Local specifics
+## 6. Local specifics
 
 Arabic-first and RTL-native with Kuwaiti dialect in marketing copy and formal
 Arabic in transactional text; Eastern Arabic numerals; KWD pricing; Kuwaiti
@@ -69,7 +86,7 @@ weekend (Fri/Sat) with evening-heavy default availability; WhatsApp as the
 notification layer (100% open rate, zero infrastructure); curriculum labels
 parents recognize (IGCSE, AS/A Level, Checkpoint).
 
-## 6. Roadmap, in order
+## 7. Roadmap, in order
 
 1. **Payments** — MyFatoorah/Tap KNET links attached to booking confirmations.
 2. **Resource packs** — paid bundles, the natural first digital product.

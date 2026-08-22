@@ -3,6 +3,8 @@ import SiteHeader from '@/components/SiteHeader';
 import SiteFooter from '@/components/SiteFooter';
 import ResourceCard from '@/components/ResourceCard';
 import { activeOfferings, getDb, getSettings, RESOURCE_TYPES } from '@/lib/db';
+import { CURRICULA } from '@/lib/curriculum';
+import { tracksFor, trackStats } from '@/lib/content';
 import { listPublishedResources } from '@/lib/resources';
 import { fmtDurationAr, fmtKWD, fmtNumAr } from '@/lib/kwtime';
 
@@ -89,8 +91,8 @@ export default function LandingPage() {
             </h1>
             <p className="sub">{s.bio}</p>
             <div className="hero-ctas">
-              <Link href="/resources" className="btn btn-primary btn-lg">
-                📚 تصفّح المكتبة مجاناً
+              <Link href="/curriculum" className="btn btn-primary btn-lg">
+                📚 ادخل المناهج
               </Link>
               <Link href="/book" className="btn btn-ghost btn-lg">احجز حصة</Link>
             </div>
@@ -108,6 +110,32 @@ export default function LandingPage() {
                 <span>معلم في الشبكة</span>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="container">
+          <div className="section-head">
+            <div className="kicker">ابدأ من هنا</div>
+            <h2>اختر منهجك</h2>
+            <p>المحتوى مقسّم حسب المنهج — والباقي (الحجز والمتابعة) نظام واحد.</p>
+          </div>
+          <div className="curric-grid">
+            {CURRICULA.map((c) => {
+              const tracks = tracksFor(c.key);
+              const lessons = tracks.reduce((n, t) => n + trackStats(t.id).lessons, 0);
+              return (
+                <Link key={c.key} href="/curriculum" className={`curric-card ${c.accent}`}>
+                  <span className="curric-flag">{c.flag}</span>
+                  <h2>{c.name_ar}</h2>
+                  <p>{c.blurb_ar}</p>
+                  <div className="curric-meta">
+                    {fmtNumAr(tracks.length)} {c.key === 'kuwaiti' ? 'صفوف' : 'برنامج'} · {fmtNumAr(lessons)} درس
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </section>

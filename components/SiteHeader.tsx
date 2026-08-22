@@ -3,7 +3,7 @@ import Atom from './Atom';
 import { getSetting } from '@/lib/db';
 import { currentMember } from '@/lib/members';
 
-export default function SiteHeader({ active }: { active?: 'resources' | 'book' | 'teachers' }) {
+export default function SiteHeader({ active }: { active?: 'curriculum' | 'resources' | 'book' | 'teachers' }) {
   const member = currentMember();
   return (
     <header className="topbar">
@@ -13,8 +13,8 @@ export default function SiteHeader({ active }: { active?: 'resources' | 'book' |
           <span>{getSetting('teacher_name')}</span>
         </Link>
         <nav className="topnav">
-          <Link className={`navlink ${active === 'resources' ? 'on' : ''}`} href="/resources">
-            المكتبة
+          <Link className={`navlink ${active === 'curriculum' ? 'on' : ''}`} href="/curriculum">
+            المناهج والمكتبة
           </Link>
           <Link className={`navlink ${active === 'teachers' ? 'on' : ''}`} href="/teachers">
             شبكة المعلمين

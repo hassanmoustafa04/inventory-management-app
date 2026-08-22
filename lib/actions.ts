@@ -9,6 +9,8 @@ import { normalizeKwPhone } from './slots';
 import { Member, Resource, ResourceAccess, SUBJECTS, LEVELS, RESOURCE_TYPES } from './db';
 import { currentMember, hashPassword, MEMBER_COOKIE, memberCookieValue, verifyPassword } from './members';
 import { deleteStoredFile, saveUpload, slugify } from './resources';
+import { lessonSlug, nextSort, trackById } from './content';
+import { MATERIAL_KINDS } from './curriculum';
 
 // ---------- auth ----------
 
@@ -183,6 +185,9 @@ export async function registerAction(_prev: { error: string }, formData: FormDat
   const school = String(formData.get('school') ?? '').trim();
   const subjects = (formData.getAll('subjects') as string[]).filter((s) => SUBJECTS.includes(s)).join('، ');
   const bio = String(formData.get('bio') ?? '').trim().slice(0, 600);
+  const curriculum = String(formData.get('curriculum') ?? '');
+  const trackIdRaw = Number(formData.get('track_id'));
+  const trackId = Number.isInteger(trackIdRaw) && trackIdRaw > 0 ? trackIdRaw : null;
 
   if (name.length < 2) return { error: 'اكتب اسمك الكامل' };
   if (!EMAIL_RE.test(email)) return { error: 'البريد الإلكتروني غير صحيح' };
@@ -191,6 +196,10 @@ export async function registerAction(_prev: { error: string }, formData: FormDat
   const phone = phoneRaw ? normalizeKwPhone(phoneRaw) : '';
   if (phoneRaw && !phone) return { error: 'رقم الهاتف غير صحيح — اكتب رقماً كويتياً من ٨ أرقام' };
   if (role === 'teacher' && !school) return { error: 'اكتب اسم المدرسة أو جهة العمل' };
+  if (role === 'student') {
+    if (!['kuwaiti', 'british'].includes(curriculum)) return { error: 'اختر المنهج' };
+    if (!trackId || !trackById(trackId)) return { error: 'اختر الصف أو البرنامج' };
+  }
 
   const db = getDb();
   if (db.prepare('SELECT 1 FROM members WHERE email = ?').get(email)) {
@@ -201,10 +210,14 @@ export async function registerAction(_prev: { error: string }, formData: FormDat
   const status = role === 'teacher' ? 'pending' : 'active';
   const info = db
     .prepare(
-      `INSERT INTO members (name, email, phone, password_hash, role, status, school, subjects, bio)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO members (name, email, phone, password_hash, role, status, school, subjects, bio,
+                            curriculum, track_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(name, email, phone || '', hashPassword(password), role, status, school, subjects, bio);
+    .run(
+      name, email, phone || '', hashPassword(password), role, status, school, subjects, bio,
+      role === 'student' ? curriculum : '', role === 'student' ? trackId : null
+    );
 
   cookies().set(MEMBER_COOKIE, memberCookieValue(Number(info.lastInsertRowid)), {
     httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 60,
@@ -246,9 +259,21 @@ export async function updateMemberProfileAction(formData: FormData) {
   if (phoneRaw && !phone) backTo('/me/profile', 'رقم الهاتف غير صحيح', true);
   if (name.length < 2) backTo('/me/profile', 'اكتب اسمك الكامل', true);
 
+  const curriculum = String(formData.get('curriculum') ?? '');
+  const trackIdRaw = Number(formData.get('track_id'));
+  const trackId = Number.isInteger(trackIdRaw) && trackIdRaw > 0 ? trackIdRaw : null;
+  const keepProgramme = ['kuwaiti', 'british'].includes(curriculum) && trackId && trackById(trackId);
+
   getDb()
-    .prepare('UPDATE members SET name = ?, phone = ?, school = ?, bio = ? WHERE id = ?')
-    .run(name, phone || '', school, bio, member.id);
+    .prepare(
+      `UPDATE members SET name = ?, phone = ?, school = ?, bio = ?,
+         curriculum = COALESCE(?, curriculum), track_id = COALESCE(?, track_id) WHERE id = ?`
+    )
+    .run(
+      name, phone || '', school, bio,
+      keepProgramme ? curriculum : null, keepProgramme ? trackId : null,
+      member.id
+    );
   revalidatePath('/me');
   backTo('/me/profile', 'تم حفظ بياناتك');
 }
@@ -511,4 +536,201 @@ export async function confirmScheduleAction() {
   revalidatePath('/teacher/schedule');
   revalidatePath('/teacher/setup');
   redirect('/teacher/schedule?msg=' + encodeURIComponent('تم تأكيد جدولك ✅'));
+}
+
+
+// ============================================================
+//  Curriculum content: units, lessons, lesson materials
+// ============================================================
+
+function contentPaths(trackSlug?: string) {
+  revalidatePath('/curriculum');
+  revalidatePath('/teacher/curriculum');
+  if (trackSlug) {
+    revalidatePath(`/curriculum/${trackSlug}`);
+    revalidatePath(`/teacher/curriculum/${trackSlug}`);
+  }
+}
+
+// ---------- units ----------
+
+export async function addUnitAction(formData: FormData) {
+  requireTeacher();
+  const trackId = Number(formData.get('track_id'));
+  const title = String(formData.get('title') ?? '').trim();
+  const subtitle = String(formData.get('subtitle') ?? '').trim();
+  const track = trackById(trackId);
+  if (!track) return;
+  if (title.length < 2) {
+    redirect(`/teacher/curriculum/${track.slug}?err=` + encodeURIComponent('اكتبي عنوان الوحدة'));
+  }
+  getDb()
+    .prepare('INSERT INTO units (track_id, title, subtitle, sort) VALUES (?, ?, ?, ?)')
+    .run(trackId, title, subtitle, nextSort('units', 'track_id', trackId));
+  contentPaths(track.slug);
+  redirect(`/teacher/curriculum/${track.slug}?msg=` + encodeURIComponent('تمت إضافة الوحدة'));
+}
+
+export async function renameUnitAction(formData: FormData) {
+  requireTeacher();
+  const id = Number(formData.get('id'));
+  const title = String(formData.get('title') ?? '').trim();
+  const subtitle = String(formData.get('subtitle') ?? '').trim();
+  if (title.length < 2) return;
+  getDb().prepare('UPDATE units SET title = ?, subtitle = ? WHERE id = ?').run(title, subtitle, id);
+  contentPaths(String(formData.get('track_slug') ?? ''));
+}
+
+export async function deleteUnitAction(formData: FormData) {
+  requireTeacher();
+  const id = Number(formData.get('id'));
+  // lessons and materials cascade; uploaded files stay in the library
+  getDb().prepare('DELETE FROM units WHERE id = ?').run(id);
+  contentPaths(String(formData.get('track_slug') ?? ''));
+}
+
+export async function moveUnitAction(formData: FormData) {
+  requireTeacher();
+  swapSort('units', 'track_id', Number(formData.get('id')), String(formData.get('dir')));
+  contentPaths(String(formData.get('track_slug') ?? ''));
+}
+
+// ---------- lessons ----------
+
+export async function addLessonAction(formData: FormData) {
+  requireTeacher();
+  const unitId = Number(formData.get('unit_id'));
+  const trackSlug = String(formData.get('track_slug') ?? '');
+  const title = String(formData.get('title') ?? '').trim();
+  if (title.length < 2) {
+    redirect(`/teacher/curriculum/${trackSlug}?err=` + encodeURIComponent('اكتبي عنوان الدرس'));
+  }
+  getDb()
+    .prepare('INSERT INTO lessons (unit_id, slug, title, sort) VALUES (?, ?, ?, ?)')
+    .run(unitId, lessonSlug(title, trackSlug), title, nextSort('lessons', 'unit_id', unitId));
+  contentPaths(trackSlug);
+  redirect(`/teacher/curriculum/${trackSlug}?msg=` + encodeURIComponent('تمت إضافة الدرس'));
+}
+
+export async function updateLessonAction(formData: FormData) {
+  requireTeacher();
+  const id = Number(formData.get('id'));
+  const title = String(formData.get('title') ?? '').trim();
+  const summary = String(formData.get('summary') ?? '').trim().slice(0, 600);
+  if (title.length < 2) return;
+  getDb().prepare('UPDATE lessons SET title = ?, summary = ? WHERE id = ?').run(title, summary, id);
+  contentPaths(String(formData.get('track_slug') ?? ''));
+  revalidatePath(`/teacher/lesson/${id}`);
+}
+
+export async function deleteLessonAction(formData: FormData) {
+  requireTeacher();
+  getDb().prepare('DELETE FROM lessons WHERE id = ?').run(Number(formData.get('id')));
+  contentPaths(String(formData.get('track_slug') ?? ''));
+}
+
+export async function moveLessonAction(formData: FormData) {
+  requireTeacher();
+  swapSort('lessons', 'unit_id', Number(formData.get('id')), String(formData.get('dir')));
+  contentPaths(String(formData.get('track_slug') ?? ''));
+}
+
+// ---------- materials ----------
+
+export async function addMaterialAction(
+  _prev: { error: string },
+  formData: FormData
+): Promise<{ error: string }> {
+  requireTeacher();
+  const lessonId = Number(formData.get('lesson_id'));
+  const kind = String(formData.get('kind') ?? '');
+  const title = String(formData.get('title') ?? '').trim();
+  const body = String(formData.get('body') ?? '').trim().slice(0, 8000);
+  const videoUrl = String(formData.get('video_url') ?? '').trim();
+  const access = String(formData.get('access') ?? 'public') as ResourceAccess;
+
+  if (!MATERIAL_KINDS.some((k) => k.key === kind)) return { error: 'اختاري نوع القسم' };
+  if (!['public', 'member', 'student', 'teacher'].includes(access)) {
+    return { error: 'اختاري مستوى الوصول' };
+  }
+
+  const file = formData.get('file');
+  let resourceId: number | null = null;
+
+  if (file instanceof File && file.size > 0) {
+    const lesson = getDb().prepare('SELECT * FROM lessons WHERE id = ?').get(lessonId) as
+      | { title: string } | undefined;
+    try {
+      const saved = await saveUpload(file);
+      const resTitle = title || `${lesson?.title ?? 'درس'} — ${saved.fileName}`;
+      resourceId = Number(
+        getDb()
+          .prepare(
+            `INSERT INTO resources
+               (slug, title, description, subject, level, type, access, file_name, file_path,
+                file_size, mime, status, author_id, author_name, is_sample)
+             VALUES (?, ?, '', 'الفيزياء', 'IGCSE', 'notes', ?, ?, ?, ?, ?, 'published', NULL, ?, 0)`
+          )
+          .run(
+            slugify(resTitle), resTitle, access, saved.fileName, saved.storedName,
+            saved.size, saved.mime, getSetting('teacher_name')
+          ).lastInsertRowid
+      );
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'تعذر رفع الملف' };
+    }
+  }
+
+  if (!resourceId && !body && !videoUrl) {
+    return { error: 'أضيفي ملفاً أو رابط فيديو أو نصاً للقسم' };
+  }
+
+  getDb()
+    .prepare(
+      `INSERT INTO materials (lesson_id, kind, title, body, video_url, resource_id, access, sort)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(lessonId, kind, title, body, videoUrl, resourceId, access,
+         nextSort('materials', 'lesson_id', lessonId));
+
+  revalidatePath(`/teacher/lesson/${lessonId}`);
+  revalidatePath('/curriculum');
+  return { error: '' };
+}
+
+export async function deleteMaterialAction(formData: FormData) {
+  requireTeacher();
+  const id = Number(formData.get('id'));
+  const lessonId = Number(formData.get('lesson_id'));
+  getDb().prepare('DELETE FROM materials WHERE id = ?').run(id);
+  revalidatePath(`/teacher/lesson/${lessonId}`);
+  revalidatePath('/curriculum');
+}
+
+export async function moveMaterialAction(formData: FormData) {
+  requireTeacher();
+  swapSort('materials', 'lesson_id', Number(formData.get('id')), String(formData.get('dir')));
+  revalidatePath(`/teacher/lesson/${Number(formData.get('lesson_id'))}`);
+}
+
+/** Swap an item's sort with its neighbour, so ordering survives arbitrary values. */
+function swapSort(table: 'units' | 'lessons' | 'materials', parentCol: string, id: number, dir: string) {
+  const db = getDb();
+  const row = db.prepare(`SELECT id, sort, ${parentCol} AS parent FROM ${table} WHERE id = ?`).get(id) as
+    | { id: number; sort: number; parent: number } | undefined;
+  if (!row) return;
+  const cmp = dir === 'up' ? '<' : '>';
+  const order = dir === 'up' ? 'DESC' : 'ASC';
+  const neighbour = db
+    .prepare(
+      `SELECT id, sort FROM ${table} WHERE ${parentCol} = ? AND (sort ${cmp} ? OR (sort = ? AND id ${cmp} ?))
+       ORDER BY sort ${order}, id ${order} LIMIT 1`
+    )
+    .get(row.parent, row.sort, row.sort, row.id) as { id: number; sort: number } | undefined;
+  if (!neighbour) return;
+  const upd = db.prepare(`UPDATE ${table} SET sort = ? WHERE id = ?`);
+  db.transaction(() => {
+    upd.run(neighbour.sort, row.id);
+    upd.run(row.sort, neighbour.id);
+  })();
 }

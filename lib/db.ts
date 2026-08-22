@@ -42,6 +42,55 @@ CREATE INDEX IF NOT EXISTS idx_resources_status ON resources(status);
 CREATE INDEX IF NOT EXISTS idx_resources_subject ON resources(subject);
 `;
 
+
+const CONTENT_DDL = `
+CREATE TABLE IF NOT EXISTS tracks (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  curriculum TEXT NOT NULL CHECK (curriculum IN ('kuwaiti','british')),
+  slug       TEXT UNIQUE NOT NULL,
+  name_ar    TEXT NOT NULL,
+  name_en    TEXT NOT NULL DEFAULT '',
+  note       TEXT NOT NULL DEFAULT '',
+  sort       INTEGER NOT NULL DEFAULT 0,
+  active     INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS units (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  title    TEXT NOT NULL,
+  subtitle TEXT NOT NULL DEFAULT '',
+  sort     INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS lessons (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  unit_id  INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+  slug     TEXT UNIQUE NOT NULL,
+  title    TEXT NOT NULL,
+  summary  TEXT NOT NULL DEFAULT '',
+  sort     INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS materials (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  lesson_id   INTEGER NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+  kind        TEXT NOT NULL,
+  title       TEXT NOT NULL DEFAULT '',
+  body        TEXT NOT NULL DEFAULT '',
+  video_url   TEXT NOT NULL DEFAULT '',
+  resource_id INTEGER REFERENCES resources(id),
+  access      TEXT NOT NULL DEFAULT 'public'
+              CHECK (access IN ('public','member','student','teacher')),
+  sort        INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_units_track ON units(track_id);
+CREATE INDEX IF NOT EXISTS idx_lessons_unit ON lessons(unit_id);
+CREATE INDEX IF NOT EXISTS idx_materials_lesson ON materials(lesson_id);
+`;
+
 const SAMPLE_SLUGS = [
   'igcse-physics-electricity-slides',
   'igcse-physics-waves-notes',
@@ -142,8 +191,22 @@ function createDb(): Database.Database {
   db.exec(RESOURCES_DDL);
   migrate(db);
   db.exec(RESOURCE_INDEXES);
+  db.exec(CONTENT_DDL);
+  migrateMembers(db);
   seed(db);
   return db;
+}
+
+/** Students record which curriculum and grade/programme they follow. */
+function migrateMembers(db: Database.Database) {
+  const cols = db.prepare('PRAGMA table_info(members)').all() as { name: string }[];
+  const have = new Set(cols.map((c) => c.name));
+  if (!have.has('curriculum')) {
+    db.exec("ALTER TABLE members ADD COLUMN curriculum TEXT NOT NULL DEFAULT ''");
+  }
+  if (!have.has('track_id')) {
+    db.exec('ALTER TABLE members ADD COLUMN track_id INTEGER');
+  }
 }
 
 /** Bring pre-existing databases up to the current resources schema. */
@@ -223,6 +286,9 @@ function seed(db: Database.Database) {
 
   const hasResources = db.prepare('SELECT COUNT(*) AS c FROM resources').get() as { c: number };
   if (hasResources.c === 0) seedResources(db);
+
+  const hasTracks = db.prepare('SELECT COUNT(*) AS c FROM tracks').get() as { c: number };
+  if (hasTracks.c === 0) seedCurriculum(db);
 }
 
 /** Sample library so the hub is never empty on first run. Files are real, downloadable PDFs. */
@@ -353,6 +419,144 @@ function samplePdf(titleAr: string, subject: string, author: string): Buffer {
   return Buffer.from(pdf, 'binary');
 }
 
+
+/**
+ * Seeds the curriculum skeleton: the Kuwaiti grades and the Cambridge IGCSE
+ * topic tree. Lesson *content* is left empty on purpose — the teacher fills it
+ * in; only the structure ships.
+ */
+function seedCurriculum(db: Database.Database) {
+  const insTrack = db.prepare(
+    'INSERT INTO tracks (curriculum, slug, name_ar, name_en, note, sort) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+  const insUnit = db.prepare(
+    'INSERT INTO units (track_id, title, subtitle, sort) VALUES (?, ?, ?, ?)'
+  );
+  const insLesson = db.prepare(
+    'INSERT INTO lessons (unit_id, slug, title, sort) VALUES (?, ?, ?, ?)'
+  );
+
+  const addLessons = (unitId: number, prefix: string, titles: string[]) => {
+    titles.forEach((title, i) => {
+      const base = `${prefix}-${title}`
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 70);
+      let slug = base;
+      let n = 2;
+      while (db.prepare('SELECT 1 FROM lessons WHERE slug = ?').get(slug)) slug = `${base}-${n++}`;
+      insLesson.run(unitId, slug, title, i + 1);
+    });
+  };
+
+  // ----- Kuwaiti government curriculum -----
+  const kwGrades: [string, string, [string, string[]][]][] = [
+    ['grade-10', 'الصف العاشر', []],
+    [
+      'grade-11-sci',
+      'الصف الحادي عشر علمي',
+      [
+        ['الوحدة الأولى: المتجهات', [
+          'الكميات القياسية والمتجهة',
+          'تمثيل المتجهات',
+          'جمع المتجهات',
+          'تحليل المتجهات',
+        ]],
+      ],
+    ],
+    ['grade-12-sci', 'الصف الثاني عشر علمي', []],
+  ];
+
+  kwGrades.forEach(([slug, name, units], gi) => {
+    const trackId = Number(
+      insTrack.run('kuwaiti', slug, name, '', '', gi + 1).lastInsertRowid
+    );
+    units.forEach(([unitTitle, lessons], ui) => {
+      const unitId = Number(insUnit.run(trackId, unitTitle, '', ui + 1).lastInsertRowid);
+      addLessons(unitId, slug, lessons);
+    });
+  });
+
+  // ----- Cambridge IGCSE Physics (0625) -----
+  const igcseId = Number(
+    insTrack
+      .run(
+        'british',
+        'cambridge-igcse',
+        'فيزياء IGCSE — كامبريدج',
+        'Cambridge IGCSE Physics',
+        'مناهج أخرى (Edexcel، AS، A Level) تُضاف لاحقاً',
+        1
+      )
+      .lastInsertRowid
+  );
+
+  const igcseTopics: [string, string[]][] = [
+    ['Motion, Forces & Energy', [
+      'Physical quantities and measurement',
+      'Motion',
+      'Speed & velocity',
+      'Acceleration',
+      'Equations of motion',
+      'Free fall',
+      'Mass & weight',
+      'Density',
+      'Forces & Newton\'s laws',
+      'Momentum',
+      'Energy, work & power',
+      'Pressure',
+    ]],
+    ['Thermal Physics', [
+      'States of matter',
+      'Kinetic particle model',
+      'Thermal expansion',
+      'Specific heat capacity',
+      'Melting, boiling & evaporation',
+      'Thermal conduction, convection & radiation',
+    ]],
+    ['Waves', [
+      'General properties of waves',
+      'Light & reflection',
+      'Refraction',
+      'Thin lenses',
+      'Dispersion & the electromagnetic spectrum',
+      'Sound',
+    ]],
+    ['Electricity & Magnetism', [
+      'Magnetism',
+      'Static electricity',
+      'Electric current',
+      'Electromotive force & potential difference',
+      'Resistance',
+      'Electrical energy & power',
+      'Circuit diagrams & components',
+      'Electrical safety',
+      'Electromagnetic induction',
+      'Motors & generators',
+      'Transformers',
+    ]],
+    ['Nuclear Physics', [
+      'The nuclear model of the atom',
+      'Isotopes',
+      'Radioactive decay & emissions',
+      'Half-life',
+      'Safety precautions',
+    ]],
+    ['Space Physics', [
+      'The Solar System',
+      'Orbits',
+      'Stars & the life cycle of a star',
+      'The Universe & redshift',
+    ]],
+  ];
+
+  igcseTopics.forEach(([title, lessons], ti) => {
+    const unitId = Number(insUnit.run(igcseId, title, '', ti + 1).lastInsertRowid);
+    addLessons(unitId, 'igcse', lessons);
+  });
+}
+
 export function sha256(s: string): string {
   return crypto.createHash('sha256').update(s).digest('hex');
 }
@@ -388,7 +592,27 @@ export type AvailabilityRule = { id: number; weekday: number; start_time: string
 export type Member = {
   id: number; name: string; email: string; phone: string; password_hash: string;
   role: 'student' | 'teacher'; status: 'active' | 'pending' | 'rejected';
+  curriculum: string; track_id: number | null;
   school: string; subjects: string; bio: string; is_student: number; created_at: string;
+};
+
+export type Track = {
+  id: number; curriculum: 'kuwaiti' | 'british'; slug: string;
+  name_ar: string; name_en: string; note: string; sort: number; active: number;
+};
+
+export type Unit = {
+  id: number; track_id: number; title: string; subtitle: string; sort: number;
+};
+
+export type Lesson = {
+  id: number; unit_id: number; slug: string; title: string; summary: string; sort: number;
+};
+
+export type Material = {
+  id: number; lesson_id: number; kind: string; title: string; body: string;
+  video_url: string; resource_id: number | null; access: ResourceAccess;
+  sort: number; created_at: string;
 };
 
 export type ResourceAccess = 'public' | 'member' | 'student' | 'teacher';

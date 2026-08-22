@@ -7,9 +7,17 @@ mobile-friendly dashboard that runs all of it.
 ## Features
 
 ### Public
-- **Landing page** — hub positioning, featured resources, packages, FAQ
-- **Resource library** (`/resources`) — filter by subject / level / type, full-text
-  search, four access tiers, download counters
+- **Landing page** — hub positioning, curriculum cards, packages, FAQ
+- **Curricula** (`/curriculum`) — content splits two ways: 🇰🇼 المنهج الحكومي
+  (grades 10, 11 science, 12 science) and 🇬🇧 المنهج البريطاني (Cambridge IGCSE
+  Physics). Each track holds units/topics → lessons → lesson sections.
+- **Lesson pages** (`/lesson/[slug]`) — sections per curriculum: شرح، فيديو،
+  مذكرة، أهم الأفكار، تجارب، تدريبات، بنك أسئلة، اختبار قصير for the Kuwaiti
+  flow; Notes, Video, Teacher Explanation, Cambridge Tips, Common
+  Misconceptions, Practical, Worksheet, Past Paper (Paper 1/3/6), Mark Scheme
+  and Quiz for Cambridge. Every section carries its own access tier.
+- **Resource library** (`/resources`) — the flat file view: filter by subject /
+  level / type, full-text search, four access tiers, download counters
 - **Resource pages** — details, gated download, cross-sell to a lesson, related files
 - **Booking wizard** (`/book`) — 4 steps against real availability, no account needed
 - **Booking status page** (`/booking/[code]`) — track or cancel with the booking code
@@ -24,6 +32,9 @@ mobile-friendly dashboard that runs all of it.
 ### Owner dashboard (`/teacher`)
 - Today's lessons, pending booking requests, monthly income, library stats
 - Bookings with filters and one-tap confirm / decline / complete
+- **Curriculum** (`/teacher/curriculum`) — add/reorder/rename units and lessons
+  per track, and build each lesson from typed sections (file, video link, or
+  text) with per-section access
 - **Library** — upload, edit, feature, delete resources; per-file download counts
 - **Review queue** — approve teachers, inspect and publish/reject submissions
 - Weekly availability + blocked days, student CRM, live settings
@@ -38,7 +49,12 @@ mobile-friendly dashboard that runs all of it.
 | `teacher` | owner approval of a teacher application |
 
 Enforced server-side on the download route — a direct API call to a gated file
-returns 403, and pending submissions are invisible to the public entirely.
+returns 403, and pending submissions are invisible to the public entirely. A
+lesson section's tier propagates to the file behind it.
+
+**One platform, split content.** Bookings, students, schedule, payments and
+settings stay a single shared system; only the study content divides by
+curriculum. A student registers with a curriculum and a grade/programme.
 
 ## Tech
 
